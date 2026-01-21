@@ -1,0 +1,8 @@
+option('playbox_cpp', type: 'boolean', value: true, description: 'Build the optional C++ wrapper')
+option('playbox_examples', type: 'boolean', value: true, description: 'Build example programs')
+option('playbox_install', type: 'boolean', value: true, description: 'Install library and headers')
+
+option('playbox_renderer', type: 'combo', choices: ['ansi', 'basic'], value: 'ansi', description: 'Renderer backend')
+option('playbox_input_impl', type: 'combo', choices: ['posix', 'default'], value: 'posix', description: 'Input backend')
+option('playbox_term_impl', type: 'combo', choices: ['posix'], value: 'posix', description: 'Terminal backend')
+option('playbox_replay', type: 'boolean', value: true, description: 'Enable record/replay support')

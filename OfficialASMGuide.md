@@ -1,5 +1,5 @@
 # PlayboxLib + Assembly Games (ASM Guide)
-
+## You dont have to make the game in the examples folder, thats just an example.
 This document shows how to use PlayboxLib from an assembly-written game.
 
 PlayboxLib is a C terminal game framework. Assembly works with it because Playbox exposes a normal C ABI. If you can link against C and follow the platform calling convention, you can write your game logic in ASM and still use Playbox for terminal setup, input, framebuffer drawing, and record/replay.

@@ -93,6 +93,58 @@ Installs:
 
 ---
 
+## Installing PlayboxLib to your path
+
+
+
+Once installed, PlayboxLib can be used from any directory.
+
+
+
+### Per-user install (recommended)
+
+
+
+```bash
+
+export C_INCLUDE_PATH="$HOME/.local/include:$C_INCLUDE_PATH"
+
+export LIBRARY_PATH="$HOME/.local/lib:$LIBRARY_PATH"
+
+export LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"
+
+```
+
+
+
+Most modern Linux distributions already include `$HOME/.local` in the default search paths.
+
+
+
+### System-wide install
+
+
+
+If you installed to `/usr/local`, no environment changes are required.
+
+
+
+### Verify installation
+
+
+
+```bash
+
+printf '%s\n' '#include "playbox/pb.h"' | cc -x c - -lplaybox
+
+```
+
+
+
+If this command succeeds, PlayboxLib is correctly installed and usable from any directory.
+
+
+
 ## Using the library
 
 Include the umbrella header:

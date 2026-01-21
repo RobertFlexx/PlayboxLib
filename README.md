@@ -386,6 +386,47 @@ It is intentionally small and readable.
 
 ---
 
+## Python asset packer (tools/py/playbox_pack.py)
+
+This repo includes a small helper that packs files into a C header.
+
+Why you would use it:
+
+* ship demos with zero runtime file loading
+* embed maps, shaders, small sprites, UI text, configs
+* keep your project as a single binary if you want
+
+It outputs a header that contains:
+
+* a static const array holding the bytes
+* a static const size_t symbol_len length
+
+### Pack a text file
+
+```bash
+python3 tools/py/playbox_pack.py pack-text assets/dialog.txt -o include/pb_assets.h
+```
+
+### Pack a binary file
+
+```bash
+python3 tools/py/playbox_pack.py pack-bin assets/logo.bin -o include/pb_assets.h
+```
+
+### Control the symbol name
+
+```bash
+python3 tools/py/playbox_pack.py pack-text assets/dialog.txt --symbol dialog_txt -o include/pb_assets.h
+```
+
+### Gzip the embedded bytes (smaller header)
+
+```bash
+python3 tools/py/playbox_pack.py pack-bin assets/big_blob.bin --gz -o include/pb_assets.h
+```
+
+If you use --gz, the bytes are compressed and must be decompressed at runtime.
+
 ## License
 
 View LICENSE [here](https://github.com/RobertFlexx/PlayboxLib/blob/main/LICENSE)

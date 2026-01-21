@@ -222,6 +222,8 @@ static void step_game(st* s){
         return;
     }
 
+
+    // i added this comment cuz peepee poopoo, yuh ay
     sn_push_front(&s->sn, nh);
 
     if(s->grow > 0){

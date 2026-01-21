@@ -104,7 +104,7 @@ build_lib() {
   src+=("${ROOT}/src/pb_app.c")
   src+=("${ROOT}/src/pb_fb.c")
   src+=("$(pick_input_src)")
-  src+=("${ROOT}/src/pb_renderer.c")
+  src+=("${ROOT}/src/pb_renderer_ansi.c")
   src+=("${ROOT}/src/pb_term_posix.c")
   src+=("${ROOT}/src/pb_time.c")
   src+=("${ROOT}/src/pb_utf8.c")

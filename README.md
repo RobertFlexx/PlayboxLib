@@ -388,12 +388,7 @@ It is intentionally small and readable.
 
 ## License
 
-Add a LICENSE file before publishing.
-
-Common picks:
-
-* MIT for maximum reuse
-* GPLv3 if you want copyleft
+View LICENSE [here](https://github.com/RobertFlexx/PlayboxLib/blob/main/LICENSE)
 
 ---
 

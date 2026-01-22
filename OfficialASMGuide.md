@@ -539,7 +539,7 @@ If you want the simplest cross-platform assembly story, use `.S` and let `clang`
 
 ---
 
-## FAQ
+## FAQ (uhh i thought of this, foreshadowing future questions)
 
 ### Does Playbox need special ASM support?
 

@@ -13,6 +13,7 @@ It is designed to be:
 
 This repo also includes an optional C++ wrapper and a small tooling folder.
 
+## (THIS IS ALPHA PHASE, EXPECT BUGS.)
 ---
 
 ## What PlayboxLib does

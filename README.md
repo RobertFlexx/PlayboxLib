@@ -485,7 +485,10 @@ If you use --gz, the bytes are compressed and must be decompressed at runtime.
 View LICENSE [here](https://github.com/RobertFlexx/PlayboxLib/blob/main/LICENSE)
 
 ---
+Heres how to use this in ASM (could be buggy) [here!](https://github.com/RobertFlexx/PlayboxLib/blob/main/OfficialASMGuide.md)
 
+
+---
 ## Credits
 
 Built as a minimal terminal framework focused on gameplay and tooling.

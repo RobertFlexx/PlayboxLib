@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(PlayboxLib VERSION 1.0.0 LANGUAGES C CXX)
+project(PlayboxLib VERSION 1.2.0 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
@@ -32,6 +32,10 @@ message(STATUS "  PLAYBOXLIB_TERM_IMPL      = ${PLAYBOXLIB_TERM_IMPL}")
 set(PLAYBOXLIB_SOURCES
     src/pb_utf8.c
     src/pb_fb.c
+    src/pb_gfx.c
+    src/pb_math.c
+    src/pb_3d.c
+    src/pb_ui.c
     src/pb_time.c
     src/pb_app.c
 )
@@ -97,6 +101,11 @@ endif()
 
 add_library(playboxlib ${PLAYBOXLIB_SOURCES})
 
+find_library(PLAYBOX_M_LIB m)
+if(PLAYBOX_M_LIB)
+    target_link_libraries(playboxlib PUBLIC ${PLAYBOX_M_LIB})
+endif()
+
 target_include_directories(playboxlib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -105,6 +114,11 @@ target_include_directories(playboxlib
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_compile_definitions(playboxlib PRIVATE PB_BUILD_SHARED)
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(playboxlib INTERFACE PB_USE_SHARED)
+endif()
+
 set_target_properties(playboxlib PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED YES
@@ -112,6 +126,8 @@ set_target_properties(playboxlib PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
 )
 
 if(MSVC)
@@ -128,8 +144,12 @@ else()
 endif()
 
 if(PLAYBOXLIB_BUILD_EXAMPLES)
+    find_library(M_LIB m)
     add_executable(pb_demo examples/demo.c)
     target_link_libraries(pb_demo PRIVATE playboxlib)
+    if(M_LIB)
+        target_link_libraries(pb_demo PRIVATE ${M_LIB})
+    endif()
 
     add_executable(pb_tetris examples/tetris.c)
     target_link_libraries(pb_tetris PRIVATE playboxlib)
@@ -140,6 +160,46 @@ if(PLAYBOXLIB_BUILD_EXAMPLES)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/pb_snake.c")
         add_executable(pb_snake examples/pb_snake.c)
         target_link_libraries(pb_snake PRIVATE playboxlib)
+    endif()
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/platformer.c")
+        add_executable(pb_platformer examples/platformer.c)
+        target_link_libraries(pb_platformer PRIVATE playboxlib)
+        if(M_LIB)
+            target_link_libraries(pb_platformer PRIVATE ${M_LIB})
+        endif()
+    endif()
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/cube3d.c")
+        add_executable(pb_cube3d examples/cube3d.c)
+        target_link_libraries(pb_cube3d PRIVATE playboxlib)
+        if(M_LIB)
+            target_link_libraries(pb_cube3d PRIVATE ${M_LIB})
+        endif()
+    endif()
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_demo.c")
+        add_executable(pb_ui_demo examples/ui_demo.c)
+        target_link_libraries(pb_ui_demo PRIVATE playboxlib)
+        if(M_LIB)
+            target_link_libraries(pb_ui_demo PRIVATE ${M_LIB})
+        endif()
+    endif()
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/arena3d.c")
+        add_executable(pb_arena3d examples/arena3d.c)
+        target_link_libraries(pb_arena3d PRIVATE playboxlib)
+        if(M_LIB)
+            target_link_libraries(pb_arena3d PRIVATE ${M_LIB})
+        endif()
+    endif()
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/minecraft.c")
+        add_executable(pb_minecraft examples/minecraft.c)
+        target_link_libraries(pb_minecraft PRIVATE playboxlib)
+        if(M_LIB)
+            target_link_libraries(pb_minecraft PRIVATE ${M_LIB})
+        endif()
     endif()
 endif()
 

@@ -51,54 +51,94 @@ static int sb_cstr(pb_renderer* r, const char* s){
     return sb_append(r, s, strlen(s));
 }
 
-static int sb_int(pb_renderer* r, int v){
-    char tmp[64];
-    int n = snprintf(tmp, sizeof(tmp), "%d", v);
+/* Emit a complete SGR (colors + styles) in one escape when possible. */
+static int emit_sgr(pb_renderer* r, pb_color fg, pb_color bg, uint16_t style, int reset){
+    char tmp[96];
+    int n = 0;
+    tmp[n++] = 0x1B;
+    tmp[n++] = '[';
+    if(reset){
+        tmp[n++] = '0';
+    }
+    if(style & PB_STYLE_BOLD){
+        if(n > 2) tmp[n++] = ';';
+        tmp[n++] = '1';
+    }
+    if(style & PB_STYLE_DIM){
+        if(n > 2) tmp[n++] = ';';
+        tmp[n++] = '2';
+    }
+    if(style & PB_STYLE_ITALIC){
+        if(n > 2) tmp[n++] = ';';
+        tmp[n++] = '3';
+    }
+    if(style & PB_STYLE_UNDERLINE){
+        if(n > 2) tmp[n++] = ';';
+        tmp[n++] = '4';
+    }
+    if(style & PB_STYLE_REVERSE){
+        if(n > 2) tmp[n++] = ';';
+        tmp[n++] = '7';
+    }
+    if(style & PB_STYLE_STRIKETHROUGH){
+        if(n > 2) tmp[n++] = ';';
+        tmp[n++] = '9';
+    }
+    if(n > 2) tmp[n++] = ';';
+    n += snprintf(tmp + n, sizeof(tmp) - (size_t)n, "38;2;%u;%u;%u;48;2;%u;%u;%um",
+                  (unsigned)fg.r, (unsigned)fg.g, (unsigned)fg.b,
+                  (unsigned)bg.r, (unsigned)bg.g, (unsigned)bg.b);
+    if(n <= 0 || n >= (int)sizeof(tmp)) return 0;
+    return sb_append(r, tmp, (size_t)n);
+}
+
+static int emit_fg(pb_renderer* r, pb_color c){
+    char tmp[48];
+    int n = snprintf(tmp, sizeof(tmp), "\x1b[38;2;%u;%u;%um",
+                     (unsigned)c.r, (unsigned)c.g, (unsigned)c.b);
     if(n <= 0) return 0;
     return sb_append(r, tmp, (size_t)n);
 }
 
-static int emit_reset(pb_renderer* r){
-    return sb_cstr(r, "\x1b[0m");
-}
-
-static int emit_style(pb_renderer* r, uint16_t style){
-    if(!emit_reset(r)) return 0;
-    if(style & PB_STYLE_BOLD) if(!sb_cstr(r, "\x1b[1m")) return 0;
-    if(style & PB_STYLE_DIM) if(!sb_cstr(r, "\x1b[2m")) return 0;
-    if(style & PB_STYLE_UNDERLINE) if(!sb_cstr(r, "\x1b[4m")) return 0;
-    if(style & PB_STYLE_REVERSE) if(!sb_cstr(r, "\x1b[7m")) return 0;
-    return 1;
-}
-
-static int emit_fg(pb_renderer* r, pb_color c){
-    if(!sb_cstr(r, "\x1b[38;2;")) return 0;
-    if(!sb_int(r, (int)c.r)) return 0;
-    if(!sb_cstr(r, ";")) return 0;
-    if(!sb_int(r, (int)c.g)) return 0;
-    if(!sb_cstr(r, ";")) return 0;
-    if(!sb_int(r, (int)c.b)) return 0;
-    if(!sb_cstr(r, "m")) return 0;
-    return 1;
-}
-
 static int emit_bg(pb_renderer* r, pb_color c){
-    if(!sb_cstr(r, "\x1b[48;2;")) return 0;
-    if(!sb_int(r, (int)c.r)) return 0;
-    if(!sb_cstr(r, ";")) return 0;
-    if(!sb_int(r, (int)c.g)) return 0;
-    if(!sb_cstr(r, ";")) return 0;
-    if(!sb_int(r, (int)c.b)) return 0;
-    if(!sb_cstr(r, "m")) return 0;
-    return 1;
+    char tmp[48];
+    int n = snprintf(tmp, sizeof(tmp), "\x1b[48;2;%u;%u;%um",
+                     (unsigned)c.r, (unsigned)c.g, (unsigned)c.b);
+    if(n <= 0) return 0;
+    return sb_append(r, tmp, (size_t)n);
 }
 
 static int emit_move(pb_renderer* r, int x, int y){
-    if(!sb_cstr(r, "\x1b[")) return 0;
-    if(!sb_int(r, y)) return 0;
-    if(!sb_cstr(r, ";")) return 0;
-    if(!sb_int(r, x)) return 0;
-    if(!sb_cstr(r, "H")) return 0;
+    char tmp[32];
+    int n = snprintf(tmp, sizeof(tmp), "\x1b[%d;%dH", y, x);
+    if(n <= 0) return 0;
+    return sb_append(r, tmp, (size_t)n);
+}
+
+static int emit_attrs(pb_renderer* r, pb_color fg, pb_color bg, uint16_t style){
+    int style_changed = (r->cur_style != style);
+    int fg_changed = !color_eq(r->cur_fg, fg);
+    int bg_changed = !color_eq(r->cur_bg, bg);
+
+    if(!style_changed && !fg_changed && !bg_changed) return 1;
+
+    if(style_changed){
+        /* Reset + reapply avoids sticky style bits (e.g. bold lingering). */
+        if(!emit_sgr(r, fg, bg, style, 1)) return 0;
+        r->cur_style = style;
+        r->cur_fg = fg;
+        r->cur_bg = bg;
+        return 1;
+    }
+
+    if(fg_changed){
+        if(!emit_fg(r, fg)) return 0;
+        r->cur_fg = fg;
+    }
+    if(bg_changed){
+        if(!emit_bg(r, bg)) return 0;
+        r->cur_bg = bg;
+    }
     return 1;
 }
 
@@ -156,11 +196,9 @@ int pb_renderer_present(pb_renderer* r, const pb_fb* fb){
     r->olen = 0;
 
     if(r->full){
-        if(!emit_reset(r)) return 0;
-        if(!emit_fg(r, r->clear.fg)) return 0;
-        if(!emit_bg(r, r->clear.bg)) return 0;
+        if(!emit_sgr(r, r->clear.fg, r->clear.bg, 0, 1)) return 0;
         if(!sb_cstr(r, "\x1b[2J\x1b[H")) return 0;
-        r->cur_style = 0xFFFFu;
+        r->cur_style = 0;
         r->cur_fg = r->clear.fg;
         r->cur_bg = r->clear.bg;
     }
@@ -194,26 +232,7 @@ int pb_renderer_present(pb_renderer* r, const pb_fb* fb){
             }
 
             if(!emit_move(r, run_start + 1, y + 1)) return 0;
-
-            if(r->cur_style != first.style){
-                if(!emit_style(r, first.style)) return 0;
-                r->cur_style = first.style;
-                r->cur_fg = (pb_color){0,0,0};
-                r->cur_bg = (pb_color){0,0,0};
-                if(!emit_fg(r, first.fg)) return 0;
-                if(!emit_bg(r, first.bg)) return 0;
-                r->cur_fg = first.fg;
-                r->cur_bg = first.bg;
-            } else {
-                if(!color_eq(r->cur_fg, first.fg)){
-                    if(!emit_fg(r, first.fg)) return 0;
-                    r->cur_fg = first.fg;
-                }
-                if(!color_eq(r->cur_bg, first.bg)){
-                    if(!emit_bg(r, first.bg)) return 0;
-                    r->cur_bg = first.bg;
-                }
-            }
+            if(!emit_attrs(r, first.fg, first.bg, first.style)) return 0;
 
             for(int xx=run_start; xx<run_end; xx++){
                 size_t k = (size_t)y * (size_t)fb->w + (size_t)xx;
@@ -228,7 +247,12 @@ int pb_renderer_present(pb_renderer* r, const pb_fb* fb){
         }
     }
 
-    int wrote = pb_term_write(r->term, r->out ? r->out : "", (int)r->olen);
+    if(r->olen == 0){
+        r->full = 0;
+        return 1;
+    }
+
+    int wrote = pb_term_write(r->term, r->out, (int)r->olen);
     r->full = 0;
     return wrote > 0 ? 1 : 0;
 }

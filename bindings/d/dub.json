@@ -1,0 +1,24 @@
+{
+	"name": "playbox",
+	"description": "PlayboxLib D bindings — TUI raylib",
+	"license": "MIT",
+	"targetType": "library",
+	"sourceFiles": ["playbox.d"],
+	"dflags": ["-fPIC"],
+	"libs": ["playbox", "m"],
+	"lflags-posix": ["-L../../build/lib", "-rpath=../../build/lib"],
+	"configurations": [
+		{
+			"name": "library",
+			"targetType": "library"
+		},
+		{
+			"name": "demo",
+			"targetType": "executable",
+			"targetName": "pb_d_demo",
+			"sourceFiles": ["demo.d"],
+			"mainSourceFile": "demo.d",
+			"targetPath": "../../build/bin"
+		}
+	]
+}

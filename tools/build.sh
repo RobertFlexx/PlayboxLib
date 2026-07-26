@@ -51,6 +51,7 @@ usage:
   tools/build.sh clean
   tools/build.sh install --prefix <dir>
   tools/build.sh rust [--debug|--release]
+  tools/build.sh asm
   tools/build.sh all [--debug|--release]
   tools/build.sh doctor
 
@@ -103,6 +104,10 @@ build_lib() {
   local src=()
   src+=("${ROOT}/src/pb_app.c")
   src+=("${ROOT}/src/pb_fb.c")
+  src+=("${ROOT}/src/pb_gfx.c")
+  src+=("${ROOT}/src/pb_math.c")
+  src+=("${ROOT}/src/pb_3d.c")
+  src+=("${ROOT}/src/pb_ui.c")
   src+=("$(pick_input_src)")
   src+=("${ROOT}/src/pb_renderer_ansi.c")
   src+=("${ROOT}/src/pb_term_posix.c")
@@ -127,16 +132,45 @@ build_lib() {
     local o="${obj[$i]}"
     i=$((i+1))
     printf "%b\n" "${t_mag}${t_bold}cc${t_reset}   ${t_dim}${f##${ROOT}/}${t_reset}"
-    "${CC_BIN}" ${base} -fPIC -c "$f" -o "$o"
+    "${CC_BIN}" ${base} -fPIC -fvisibility=hidden -DPB_BUILD_SHARED -c "$f" -o "$o"
   done
 
   printf "%b\n" "${t_mag}${t_bold}ar${t_reset}   ${t_dim}lib/libplaybox.a${t_reset}"
   ar rcs "${BUILD}/lib/libplaybox.a" "${obj[@]}"
 
   printf "%b\n" "${t_mag}${t_bold}ld${t_reset}   ${t_dim}lib/libplaybox.so${t_reset}"
-  "${CC_BIN}" -shared ${sflags} -o "${BUILD}/lib/libplaybox.so" "${obj[@]}"
+  "${CC_BIN}" -shared ${sflags} -Wl,-soname,libplaybox.so.1 -o "${BUILD}/lib/libplaybox.so.1.2.0" "${obj[@]}" -lm
+  ln -sfn libplaybox.so.1.2.0 "${BUILD}/lib/libplaybox.so.1"
+  ln -sfn libplaybox.so.1 "${BUILD}/lib/libplaybox.so"
+
+  # pkg-config
+  mkdir -p "${BUILD}/lib/pkgconfig"
+  cat > "${BUILD}/lib/pkgconfig/playbox.pc" <<EOF
+prefix=${ROOT}
+exec_prefix=\${prefix}
+libdir=${BUILD}/lib
+includedir=${ROOT}/include
+
+Name: playbox
+Description: PlayboxLib terminal game framework
+Version: 1.2.0
+Libs: -L\${libdir} -lplaybox -lm
+Cflags: -I\${includedir}
+EOF
 
   ok "core built -> build/lib"
+}
+
+build_asm_demo() {
+  mkdir -p "${BUILD}/obj" "${BUILD}/bin"
+  [[ -f "${BUILD}/lib/libplaybox.a" || -f "${BUILD}/lib/libplaybox.so" ]] || build_lib 0
+
+  "${CC_BIN}" -O2 -I"${ROOT}/include" -c "${ROOT}/examples/asm_demo/glue.c" -o "${BUILD}/obj/asm_glue.o"
+  "${CC_BIN}" -O2 -I"${ROOT}/include" -c "${ROOT}/examples/asm_demo/draw_helpers.c" -o "${BUILD}/obj/asm_draw.o"
+  as --64 "${ROOT}/examples/asm_demo/game.S" -o "${BUILD}/obj/asm_game.o"
+  "${CC_BIN}" "${BUILD}/obj/asm_glue.o" "${BUILD}/obj/asm_draw.o" "${BUILD}/obj/asm_game.o" \
+    -o "${BUILD}/bin/pb_asm_demo" -L"${BUILD}/lib" -lplaybox -lm -Wl,-rpath,'$ORIGIN/../lib'
+  ok "asm demo -> build/bin/pb_asm_demo"
 }
 
 build_cpp() {
@@ -244,7 +278,8 @@ done
 case "${cmd}" in
   build) build_lib "${sanitize}"; build_cpp ;;
   rust) build_rust ;;
-  all) build_lib "${sanitize}"; build_cpp; build_rust ;;
+  asm) build_asm_demo ;;
+  all) build_lib "${sanitize}"; build_cpp; build_rust; build_asm_demo ;;
   clean) clean_all ;;
   install) install_prefix "${prefix}" ;;
   doctor) doctor ;;

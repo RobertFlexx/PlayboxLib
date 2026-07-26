@@ -1,0 +1,11 @@
+[package]
+name = "playbox-sys"
+version = "1.1.0"
+edition = "2021"
+description = "Low-level FFI bindings to PlayboxLib"
+license = "MIT"
+links = "playbox"
+
+[dependencies]
+
+[build-dependencies]

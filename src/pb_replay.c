@@ -113,6 +113,9 @@ static int write_event(FILE* f, const pb_event* ev) {
             if (!write_i32(f, (int32_t)ev->as.resize.height)) return 0;
             return 1;
 
+        case PB_EVENT_FOCUS:
+            return write_u32(f, (uint32_t)ev->as.focus.focused);
+
         default:
             return 0;
     }
@@ -192,6 +195,11 @@ static int read_event(FILE* f, pb_event* ev) {
         ev->as.resize.height = (int)i;
 
         return 1;
+
+        case PB_EVENT_FOCUS:
+            if (!read_u32(f, &u)) return 0;
+            ev->as.focus.focused = (uint8_t)u;
+            return 1;
 
         default:
             return 0;

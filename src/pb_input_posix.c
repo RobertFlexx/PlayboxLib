@@ -74,6 +74,86 @@ static void pb_apply_mods(int mod, pb_key_event* ke){
     ke->ctrl  = (m & 4) ? 1 : 0;
 }
 
+/* Parse decimal, optionally with :subfields (Kitty). Returns primary in *out. */
+static int pb_parse_field(const uint8_t* s, size_t n, size_t* io_i, int* out, int* out_sub){
+    int v = 0;
+    size_t i = *io_i;
+    int any = 0;
+    while(i < n && s[i] >= '0' && s[i] <= '9'){
+        any = 1;
+        v = v * 10 + (int)(s[i] - '0');
+        i++;
+    }
+    if(!any) return 0;
+    *out = v;
+    if(out_sub) *out_sub = 0;
+    /* Skip optional :subfields; keep first sub as event-type when present */
+    while(i < n && s[i] == ':'){
+        i++;
+        int sv = 0;
+        int sany = 0;
+        while(i < n && s[i] >= '0' && s[i] <= '9'){
+            sany = 1;
+            sv = sv * 10 + (int)(s[i] - '0');
+            i++;
+        }
+        if(out_sub && sany && *out_sub == 0) *out_sub = sv;
+        (void)sany;
+    }
+    *io_i = i;
+    return 1;
+}
+
+static pb_key pb_kitty_functional(int code){
+    switch(code){
+        case 27: return PB_KEY_ESC;
+        case 13: return PB_KEY_ENTER;
+        case 9:  return PB_KEY_TAB;
+        case 127: return PB_KEY_BACKSPACE;
+        case 57352: return PB_KEY_LEFT;   /* some terminals use PUA for arrows */
+        case 57353: return PB_KEY_RIGHT;
+        case 57354: return PB_KEY_UP;
+        case 57355: return PB_KEY_DOWN;
+        case 57356: return PB_KEY_PGUP;
+        case 57357: return PB_KEY_PGDN;
+        case 57348: return PB_KEY_HOME;   /* vary by terminal; also legacy forms */
+        case 57349: return PB_KEY_END;
+        case 57350: return PB_KEY_INS;
+        case 57351: return PB_KEY_DEL;
+        case 57364: return PB_KEY_F1;
+        case 57365: return PB_KEY_F2;
+        case 57366: return PB_KEY_F3;
+        case 57367: return PB_KEY_F4;
+        case 57368: return PB_KEY_F5;
+        case 57369: return PB_KEY_F6;
+        case 57370: return PB_KEY_F7;
+        case 57371: return PB_KEY_F8;
+        case 57372: return PB_KEY_F9;
+        case 57373: return PB_KEY_F10;
+        case 57374: return PB_KEY_F11;
+        case 57375: return PB_KEY_F12;
+        default: return PB_KEY_NONE;
+    }
+}
+
+static uint8_t pb_event_pressed_from_type(int event_type){
+    /* 1=press 2=repeat 3=release; missing/0 => press */
+    if(event_type == 3) return 0;
+    return 1;
+}
+
+static int pb_try_focus(pb_input* in, pb_event* out_ev){
+    if(in->len < 3) return 0;
+    const uint8_t* s = in->buf;
+    if(s[0] != 0x1B || s[1] != '[') return 0;
+    if(s[2] != 'I' && s[2] != 'O') return 0;
+
+    out_ev->type = PB_EVENT_FOCUS;
+    out_ev->as.focus.focused = (s[2] == 'I') ? 1 : 0;
+    pb_buf_consume(in, 3);
+    return 1;
+}
+
 static int pb_try_mouse(pb_input* in, pb_event* out_ev){
     if(in->len < 6) return 0;
     const uint8_t* s = in->buf;
@@ -99,22 +179,25 @@ static int pb_try_mouse(pb_input* in, pb_event* out_ev){
     me.x = x - 1;
     me.y = y - 1;
 
-    int pressed = (fin == 'M') ? 1 : 0;
-    me.pressed = (uint8_t)pressed;
-
-    me.button = (uint8_t)(b & 3u);
-
-    int wheel = 0;
-    if((b & 64) != 0){
-        wheel = (me.button == 0) ? 1 : -1;
-        me.button = 0;
-        me.pressed = 1;
-    }
-    me.wheel = wheel;
+    int is_motion = (b & 32) != 0;
+    int is_wheel = (b & 64) != 0;
 
     me.shift = (b & 4) ? 1 : 0;
     me.alt   = (b & 8) ? 1 : 0;
     me.ctrl  = (b & 16) ? 1 : 0;
+
+    if(is_wheel){
+        me.wheel = ((b & 1) == 0) ? 1 : -1;
+        me.button = 0;
+        me.pressed = 1;
+    }else if(is_motion && (b & 3) == 3){
+        /* Pointer move with no buttons — position only. */
+        me.button = 0xFFu;
+        me.pressed = 0;
+    }else{
+        me.button = (uint8_t)(b & 3u);
+        me.pressed = (fin == 'M') ? 1 : 0;
+    }
 
     out_ev->type = PB_EVENT_MOUSE;
     out_ev->as.mouse = me;
@@ -194,12 +277,15 @@ static int pb_try_escape(pb_input* in, pb_event* out_ev){
 
     size_t i = 2;
     int p[4] = {0,0,0,0};
+    int sub[4] = {0,0,0,0};
     int pc = 0;
 
     while(i < in->len && pc < 4){
-        int v = 0;
-        if(!pb_parse_num(s, in->len, &i, &v)) break;
-        p[pc++] = v;
+        int v = 0, sv = 0;
+        if(!pb_parse_field(s, in->len, &i, &v, &sv)) break;
+        p[pc] = v;
+        sub[pc] = sv;
+        pc++;
         if(i < in->len && s[i] == ';'){
             i++;
             continue;
@@ -210,6 +296,15 @@ static int pb_try_escape(pb_input* in, pb_event* out_ev){
     if(i >= in->len) return 0;
 
     uint8_t fin = s[i];
+    int mod = 1;
+    int event_type = 0;
+    if(pc >= 2){
+        mod = p[1];
+        event_type = sub[1];
+    }else if(pc >= 1){
+        event_type = sub[0];
+    }
+    uint8_t pressed = pb_event_pressed_from_type(event_type);
 
     if(fin == 'A' || fin == 'B' || fin == 'C' || fin == 'D' || fin == 'H' || fin == 'F'){
         pb_key k = PB_KEY_NONE;
@@ -223,10 +318,7 @@ static int pb_try_escape(pb_input* in, pb_event* out_ev){
         pb_key_event ke;
         memset(&ke, 0, sizeof(ke));
         ke.key = k;
-        ke.pressed = 1;
-
-        int mod = 1;
-        if(pc >= 2 && p[0] == 1) mod = p[1];
+        ke.pressed = pressed;
         pb_apply_mods(mod, &ke);
 
         out_ev->type = PB_EVENT_KEY;
@@ -265,10 +357,7 @@ static int pb_try_escape(pb_input* in, pb_event* out_ev){
             pb_key_event ke;
             memset(&ke, 0, sizeof(ke));
             ke.key = k;
-            ke.pressed = 1;
-
-            int mod = 1;
-            if(pc >= 2) mod = p[1];
+            ke.pressed = pressed;
             pb_apply_mods(mod, &ke);
 
             out_ev->type = PB_EVENT_KEY;
@@ -276,6 +365,35 @@ static int pb_try_escape(pb_input* in, pb_event* out_ev){
             pb_buf_consume(in, i + 1);
             return 1;
         }
+    }
+
+    /* Kitty CSI u: CSI codepoint ; mods : event u */
+    if(fin == 'u' && pc >= 1){
+        int code = p[0];
+        pb_key_event ke;
+        memset(&ke, 0, sizeof(ke));
+        ke.pressed = pressed;
+        pb_apply_mods(mod, &ke);
+
+        pb_key fk = pb_kitty_functional(code);
+        if(fk != PB_KEY_NONE){
+            ke.key = fk;
+        }else if(code >= 32 && code < 127){
+            ke.key = PB_KEY_NONE;
+            ke.codepoint = (uint32_t)code;
+        }else if(code > 0 && code < 32){
+            /* Rare; treat as none */
+            ke.key = PB_KEY_NONE;
+            ke.codepoint = 0;
+        }else{
+            ke.key = PB_KEY_NONE;
+            ke.codepoint = (code > 0 && code < 0x110000) ? (uint32_t)code : 0;
+        }
+
+        out_ev->type = PB_EVENT_KEY;
+        out_ev->as.key = ke;
+        pb_buf_consume(in, i + 1);
+        return 1;
     }
 
     return 0;
@@ -404,6 +522,7 @@ int pb_input_poll(pb_input* in, pb_event* out_ev){
     }
 
     if(pb_try_mouse(in, out_ev)) return 1;
+    if(pb_try_focus(in, out_ev)) return 1;
     if(pb_try_escape(in, out_ev)) return 1;
 
     if(in->len == 1 && in->buf[0] == 0x1B){

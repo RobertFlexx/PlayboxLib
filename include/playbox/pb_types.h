@@ -15,12 +15,38 @@ static inline pb_color pb_rgb(uint8_t r, uint8_t g, uint8_t b){
     pb_color c; c.r=r; c.g=g; c.b=b; return c;
 }
 
+static inline pb_color pb_color_fade(pb_color c, float alpha){
+    if(alpha < 0.f) alpha = 0.f;
+    if(alpha > 1.f) alpha = 1.f;
+    pb_color o;
+    o.r = (uint8_t)((float)c.r * alpha + 0.5f);
+    o.g = (uint8_t)((float)c.g * alpha + 0.5f);
+    o.b = (uint8_t)((float)c.b * alpha + 0.5f);
+    return o;
+}
+
+static inline pb_color pb_color_lerp(pb_color a, pb_color b, float t){
+    if(t < 0.f) t = 0.f;
+    if(t > 1.f) t = 1.f;
+    pb_color o;
+    o.r = (uint8_t)((float)a.r + ((float)b.r - (float)a.r) * t + 0.5f);
+    o.g = (uint8_t)((float)a.g + ((float)b.g - (float)a.g) * t + 0.5f);
+    o.b = (uint8_t)((float)a.b + ((float)b.b - (float)a.b) * t + 0.5f);
+    return o;
+}
+
+static inline int pb_color_eq(pb_color a, pb_color b){
+    return a.r==b.r && a.g==b.g && a.b==b.b;
+}
+
 typedef enum {
-    PB_STYLE_NONE      = 0,
-    PB_STYLE_BOLD      = 1u << 0,
-    PB_STYLE_DIM       = 1u << 1,
-    PB_STYLE_UNDERLINE = 1u << 2,
-    PB_STYLE_REVERSE   = 1u << 3
+    PB_STYLE_NONE         = 0,
+    PB_STYLE_BOLD         = 1u << 0,
+    PB_STYLE_DIM          = 1u << 1,
+    PB_STYLE_UNDERLINE    = 1u << 2,
+    PB_STYLE_REVERSE      = 1u << 3,
+    PB_STYLE_ITALIC       = 1u << 4,
+    PB_STYLE_STRIKETHROUGH= 1u << 5
 } pb_style;
 
 typedef struct {
@@ -57,8 +83,16 @@ typedef enum {
     PB_KEY_F9,
     PB_KEY_F10,
     PB_KEY_F11,
-    PB_KEY_F12
+    PB_KEY_F12,
+    PB_KEY_COUNT
 } pb_key;
+
+typedef enum {
+    PB_MOUSE_LEFT = 0,
+    PB_MOUSE_MIDDLE = 1,
+    PB_MOUSE_RIGHT = 2,
+    PB_MOUSE_BUTTON_COUNT = 8
+} pb_mouse_button;
 
 typedef enum {
     PB_EVENT_NONE = 0,
@@ -66,7 +100,8 @@ typedef enum {
     PB_EVENT_TEXT,
     PB_EVENT_MOUSE,
     PB_EVENT_RESIZE,
-    PB_EVENT_QUIT
+    PB_EVENT_QUIT,
+    PB_EVENT_FOCUS
 } pb_event_type;
 
 typedef struct {
@@ -95,12 +130,17 @@ typedef struct {
 } pb_resize_event;
 
 typedef struct {
+    uint8_t focused;
+} pb_focus_event;
+
+typedef struct {
     pb_event_type type;
     union {
         pb_key_event key;
         uint32_t text;
         pb_mouse_event mouse;
         pb_resize_event resize;
+        pb_focus_event focus;
     } as;
 } pb_event;
 

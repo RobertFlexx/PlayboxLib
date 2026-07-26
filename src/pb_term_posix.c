@@ -99,10 +99,13 @@ int pb_term_enter(pb_term* t){
     if(!pb_set_raw(t)) return 0;
     pb_term_set_nonblocking(t, 1);
 
+    /* Kitty keyboard protocol: disambiguate + event types + all keys as CSI.
+     * Unsupported terminals ignore this; supported ones give real key-up. */
     const char* seq =
     "\x1b[?1049h"
     "\x1b[?25l"
     "\x1b[?7l"
+    "\x1b[>11u"
     "\x1b[0m"
     "\x1b[2J"
     "\x1b[H";
@@ -115,6 +118,8 @@ void pb_term_leave(pb_term* t){
     pb_term_enable_mouse(t, 0);
 
     const char* seq =
+    "\x1b[<u"
+    "\x1b[?1004l"
     "\x1b[0m"
     "\x1b[?7h"
     "\x1b[?25h"
@@ -170,11 +175,40 @@ void pb_term_enable_mouse(pb_term* t, int enabled){
     "\x1b[?1002h"
     "\x1b[?1006h";
     const char* off =
+    "\x1b[?1003l"
     "\x1b[?1000l"
     "\x1b[?1002l"
     "\x1b[?1006l";
     const char* seq = enabled ? on : off;
     pb_term_write(t, seq, (int)strlen(seq));
+}
+
+void pb_term_set_cursor_visible(pb_term* t, int visible){
+    if(!t) return;
+    const char* seq = visible ? "\x1b[?25h" : "\x1b[?25l";
+    pb_term_write(t, seq, (int)strlen(seq));
+}
+
+void pb_term_set_mouse_capture(pb_term* t, int capture){
+    if(!t) return;
+    /* 1003 = any motion (FPS look). Must disable 1002 or many terminals ignore 1003. */
+    if(capture){
+        const char* seq =
+            "\x1b[?1002l"
+            "\x1b[?1000h"
+            "\x1b[?1003h"
+            "\x1b[?1006h"
+            "\x1b[?25l";
+        pb_term_write(t, seq, (int)strlen(seq));
+    } else {
+        const char* seq =
+            "\x1b[?1003l"
+            "\x1b[?1000h"
+            "\x1b[?1002h"
+            "\x1b[?1006h"
+            "\x1b[?25h";
+        pb_term_write(t, seq, (int)strlen(seq));
+    }
 }
 
 int pb_term_poll_resize(pb_term* t){

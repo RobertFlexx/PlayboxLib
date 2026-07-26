@@ -1,8 +1,10 @@
 # PlayboxLib
 
-PlayboxLib is a small terminal game framework for C.
+PlayboxLib is a small terminal game framework for C, basically think **raylib for the TUI**.
 
-It gives you a clean, game-like loop (event -> update -> draw), a framebuffer you can draw into, input parsing (keys, text, mouse, resize), and a fast ANSI renderer that only prints what changed.
+It gives you a clean, game-like loop (event -> update -> draw), a framebuffer you can draw into, raylib-style input polling, braille/half-block pixels, soft 3D, UI widgets, camera & scissor, shape helpers, and a fast ANSI renderer that only prints what changed.
+
+First-class bindings live under `bindings/` for **C++**, **Rust**, **Zig**, **D**, **Go**, **Python**, **Nim**, plus an **ASM** demo. See [docs/BINDINGS.md](docs/BINDINGS.md).
 
 It is designed to be:
 
@@ -71,6 +73,18 @@ Outputs:
 
 ```bash
 tools/build.sh all --debug
+```
+
+### Examples (Meson)
+
+```bash
+meson setup build && meson compile -C build
+./build/pb_demo        # 2D showcase
+./build/pb_cube3d      # soft 3D orbiting cube (braille depth)
+./build/pb_arena3d     # 3D arena: collect, shoot, survive
+./build/pb_minecraft   # voxel FPS (PlayboxCraft)
+./build/pb_ui_demo     # buttons, sliders, panels, modal
+./build/pb_platformer  # platformer sample
 ```
 
 ### Clean
@@ -198,15 +212,29 @@ Each cell contains:
 * a Unicode codepoint (`ch`)
 * foreground RGB (`fg`)
 * background RGB (`bg`)
-* style flags (`bold`, `dim`, `underline`, `reverse`)
+* style flags (`bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`)
 
 Useful functions:
 
-* `pb_fb_clear`
-* `pb_fb_put`
-* `pb_fb_text`
-* `pb_fb_fill_rect`
-* `pb_fb_box`
+* `pb_fb_clear`, `pb_fb_put`, `pb_fb_get`
+* `pb_fb_text`, `pb_fb_textf`, `pb_fb_text_centered`
+* `pb_fb_fill_rect`, `pb_fb_hline`, `pb_fb_vline`, `pb_fb_line`
+* `pb_fb_box`, `pb_fb_box_double`, `pb_fb_panel`
+* `pb_fb_circle`, `pb_fb_fill_circle`
+* `pb_fb_blit`, `pb_fb_blit_masked`
+* `pb_fb_plot*` — half-block pixels (2× vertical)
+* `pb_fb_braille_*` — braille pixels (2×4 per cell)
+* `pb_fb_quad_*` — quadrant pixels (2×2 per cell)
+* `pb_fb_box_ex` / `panel_ex` / `shadow` — rounded UI chrome
+* `pb_fb_text_wrap` / `pb_char_width` — layout-aware text
+* `pb_fb_blit_blend` / `pb_cell_blend` — alpha compositing
+* `pb_fb_fill_triangle` / particles / nine-slice
+* `pb_fb_set_camera` / `pb_fb_set_clip` / `pb_cam2d` — camera + scissor
+* `pb_sheet` / `pb_fb_blit_tile` — sprite sheets
+* `pb_fb_fill_gradient_*` / `pb_fb_fill_dither` / `fill_shade` — fills
+* `pb_math` — vec2/3/4, mat4, look-at, perspective
+* `pb_3d` — soft 3D raster (depth buffer → braille/half/quad/cell)
+* `pb_ui` — popups/toasts + immediate-mode widgets (button/slider/panel)
 
 Example:
 
@@ -216,6 +244,8 @@ pb_color bg = pb_rgb(10,12,16);
 
 pb_fb_clear(fb, pb_cell_make(' ', fg, bg, 0));
 pb_fb_text(fb, 2, 2, "hello", fg, bg, PB_STYLE_BOLD);
+pb_fb_circle(fb, 40, 12, 6, pb_cell_make('*', pb_rgb(80,200,255), bg, 0));
+pb_fb_plot_fill_circle(fb, 80, 20, 8, pb_rgb(255,120,200));
 ```
 
 You do not print directly while Playbox is running. Draw into the framebuffer and let the renderer present it.
@@ -224,15 +254,26 @@ You do not print directly while Playbox is running. Draw into the framebuffer an
 
 ## Input model
 
-Input comes in as `pb_event`:
+Input comes in as `pb_event` **and** is tracked for raylib-style polling.
 
 Event types:
 
 * `PB_EVENT_KEY`
-* `PB_EVENT_TEXT`
+* `PB_EVENT_TEXT` (mirrored from printable keys)
 * `PB_EVENT_MOUSE`
 * `PB_EVENT_RESIZE`
 * `PB_EVENT_QUIT`
+* `PB_EVENT_FOCUS`
+
+### Polling (recommended for gameplay)
+
+```c
+if(pb_is_key_down(app, PB_KEY_LEFT)) { /* hold */ }
+if(pb_is_char_pressed(app, ' ')) { /* edge */ }
+int mx = pb_get_mouse_x(app);
+int my = pb_get_mouse_y(app);
+int fps = pb_get_fps(app);
+```
 
 ### Keys
 
@@ -244,6 +285,7 @@ Arrow keys and function keys are normalized to `pb_key` values like:
 Printable keys usually show up as:
 
 * `PB_EVENT_KEY` with `ev->as.key.codepoint`
+* and also `PB_EVENT_TEXT` with the same codepoint
 
 Ctrl and Alt modifiers are available through:
 
@@ -251,27 +293,21 @@ Ctrl and Alt modifiers are available through:
 * `ev->as.key.alt`
 * `ev->as.key.shift`
 
-### Text
-
-For actual text input (Unicode codepoints), you can also handle:
-
-* `PB_EVENT_TEXT`
-
 ### Mouse
 
 Mouse input includes:
 
 * x, y
-* button
+* button (`PB_MOUSE_LEFT` / `MIDDLE` / `RIGHT`)
 * pressed
 * wheel
 * modifier keys
 
-### Resize
+### Resize / focus / quit
 
-`PB_EVENT_RESIZE` reports the new terminal dimensions.
-
-Playbox automatically resizes the framebuffer and then sends you the event.
+* `PB_EVENT_RESIZE` — framebuffer is resized for you first
+* `PB_EVENT_FOCUS` — terminal focus in/out
+* `PB_EVENT_QUIT` — delivered on Ctrl+C / clean shutdown paths
 
 ---
 
@@ -320,7 +356,7 @@ You can override the recording seed with:
 PLAYBOX_SEED=12345 PLAYBOX_RECORD=run.pbr ./your_demo
 ```
 
-The replay format is documented in `docs/replay_format.md`.
+The replay format is documented in `PlayboxReplayFormat.md`.
 
 ---
 
@@ -360,7 +396,7 @@ tools/replayctl.sh replay mydemo out.pbr
   * helper scripts and optional utilities
 * `docs/`
 
-  * file format docs and extra notes
+  * extra notes (see also `HowToImplement.md`, `PlayboxReplayFormat.md`)
 
 ---
 

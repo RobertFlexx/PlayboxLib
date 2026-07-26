@@ -1,0 +1,97 @@
+# ---- Build outputs ----
+/build/
+/out/
+/dist/
+/install/
+cmake-build-*/
+compile_commands.json
+
+# Object / library artifacts anywhere
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.exe
+*.out
+*.app
+
+# Meson / Ninja / CMake leftovers outside build/
+.ninja_deps
+.ninja_log
+meson-private/
+meson-logs/
+meson-info/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+Testing/
+
+# ---- Language / binding caches ----
+# Rust
+**/target/
+**/*.rs.bk
+**/Cargo.lock
+!tools/rust/Cargo.lock
+
+# Zig
+**/.zig-cache/
+**/zig-cache/
+**/zig-out/
+
+# D
+.dub/
+*.lst
+
+# Go
+**/vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.env/
+
+# Nim
+nimcache/
+*.exe
+
+# Node (if added later)
+node_modules/
+
+# ---- Editor / IDE / tooling ----
+.cache/
+.clangd/
+.clang-format.tmp
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Replay / runtime leftovers ----
+*.pbreplay
+*.pbrec
+*.log
+core
+core.*
+*.core
+
+# ---- Packaging ----
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.deb
+*.rpm
+*.AppImage
